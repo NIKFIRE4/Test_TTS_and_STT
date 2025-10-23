@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  tts:
+    build:
+      context: ./tts_service
+      dockerfile: Dockerfile
+    container_name: tts_service
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TTS_PORT=${TTS_PORT:-8082}
+      - MODEL_PATH=/opt/models
+      - CHUNK_SIZE=${TTS_CHUNK_SIZE:-4096}
+    ports:
+      - "${TTS_PORT:-8082}:8082"
+    volumes:
+      - models_tts:/opt/models
+      - logs:/var/log/app
+    networks:
+      - speech_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  asr:
+    build:
+      context: ./asr_service
+      dockerfile: Dockerfile
+    container_name: asr_service
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ASR_PORT=${ASR_PORT:-8081}
+      - MODEL_PATH=/opt/models
+      - MODEL_SIZE=${ASR_MODEL_SIZE:-base.en}
+      - MAX_AUDIO_DURATION=${MAX_AUDIO_DURATION:-15}
+    ports:
+      - "${ASR_PORT:-8081}:8081"
+    volumes:
+      - models_asr:/opt/models
+      - logs:/var/log/app
+    networks:
+      - speech_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GATEWAY_PORT=${GATEWAY_PORT:-8000}
+      - TTS_SERVICE_URL=${TTS_SERVICE_URL:-http://tts:8082}
+      - ASR_SERVICE_URL=${ASR_SERVICE_URL:-http://asr:8081}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-60}
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000"
+    volumes:
+      - logs:/var/log/app
+    networks:
+      - speech_net
+    depends_on:
+      tts:
+        condition: service_healthy
+      asr:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  speech_net:
+    driver: bridge
+    name: speech_net
+
+volumes:
+  models_tts:
+    name: models_tts
+  models_asr:
+    name: models_asr
+  logs:
+    name: speech_logs
