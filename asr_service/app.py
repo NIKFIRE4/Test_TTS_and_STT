@@ -185,18 +185,6 @@ async def startup_event():
     load_model()
 
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    if asr_model is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    return {
-        "status": "healthy",
-        "service": "asr",
-        "model_loaded": asr_model is not None,
-        "engine": "vosk",
-    }
-
 
 @app.post("/api/stt/bytes")
 async def stt_from_bytes(request: Request):
