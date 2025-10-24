@@ -79,6 +79,7 @@ docker-compose up --build
 
 
 ## 📡 API Documentation
+![Демонстрация эндпоинтов](https://github.com/NIKFIRE4/Test_TTS_and_STT/blob/3b6721157730f80e30d19ec27a871860f808a574/test.gif)
 
 ### 1. TTS — Синтез речи (через Gateway)
 
