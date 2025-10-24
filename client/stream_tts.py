@@ -13,7 +13,7 @@ import wave
 import websockets
 
 
-GATEWAY_URL = "ws://localhost:8000/ws/tts"
+GATEWAY_URL = "ws://localhost:8082/ws/tts"
 OUTPUT_FILE = "out.wav"
 SAMPLE_RATE = 16000
 CHANNELS = 1
