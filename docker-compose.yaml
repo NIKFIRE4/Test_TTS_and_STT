@@ -1,3 +1,5 @@
+
+
 services:
   tts:
     build:
@@ -16,6 +18,12 @@ services:
       - logs:/var/log/app
     networks:
       - speech_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   asr:
     build:
@@ -35,6 +43,12 @@ services:
       - logs:/var/log/app
     networks:
       - speech_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   gateway:
     build:
@@ -54,8 +68,16 @@ services:
     networks:
       - speech_net
     depends_on:
-      - tts
-      - asr
+      tts:
+        condition: service_healthy
+      asr:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 networks:
   speech_net:

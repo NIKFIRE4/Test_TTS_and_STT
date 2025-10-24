@@ -41,6 +41,61 @@ app = FastAPI(
 )
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "gateway",
+        "tts_service_url": TTS_SERVICE_URL,
+        "asr_service_url": ASR_SERVICE_URL
+    }
+
+
+@app.get("/health/full")
+async def full_health_check():
+    """
+    Полная проверка здоровья - проверяет доступность всех сервисов
+    """
+    services = {
+        "gateway": "healthy",
+        "tts": "unknown",
+        "asr": "unknown"
+    }
+    
+    # Проверяем TTS
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            tts_response = await client.get(f"{TTS_SERVICE_URL}/health")
+            if tts_response.status_code == 200:
+                tts_data = tts_response.json()
+                services["tts"] = "healthy" if tts_data.get("model_loaded") else "degraded"
+            else:
+                services["tts"] = "error"
+    except Exception as e:
+        services["tts"] = f"unreachable: {str(e)}"
+        logger.warning(f"tts_health_check_failed: {e}")
+    
+    # Проверяем ASR
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            asr_response = await client.get(f"{ASR_SERVICE_URL}/health")
+            if asr_response.status_code == 200:
+                asr_data = asr_response.json()
+                services["asr"] = "healthy" if asr_data.get("model_loaded") else "degraded"
+            else:
+                services["asr"] = "error"
+    except Exception as e:
+        services["asr"] = f"unreachable: {str(e)}"
+        logger.warning(f"asr_health_check_failed: {e}")
+    
+    all_healthy = all(v == "healthy" for v in services.values())
+    
+    return {
+        "status": "healthy" if all_healthy else "degraded",
+        "services": services
+    }
+
 
 @app.post("/api/echo-bytes")
 async def echo_bytes(request: Request):

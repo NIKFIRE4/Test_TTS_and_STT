@@ -71,6 +71,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    model_loaded = MODEL_STATE["model"] is not None
+    model_status = "loaded" if model_loaded else "not_loaded"
+    logger.info(f"health_check: model_status={model_status}")
+    return {
+        "status": "healthy" if model_loaded else "degraded",
+        "service": "tts",
+        "model_loaded": model_loaded
+    }
 
 async def generate_audio_stream(text: str, chunk_size: int = 4096):
     """
