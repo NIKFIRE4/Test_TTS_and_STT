@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import StreamingResponse
 import httpx
 
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
@@ -15,24 +16,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 # Конфигурация из переменных окружения
-TTS_HOST = os.getenv("TTS_HOST", "localhost:8082")
-ASR_HOST = os.getenv("ASR_HOST", "localhost:8081")
+TTS_SERVICE_URL = os.getenv("TTS_SERVICE_URL", "http://localhost:8082")
+ASR_SERVICE_URL = os.getenv("ASR_SERVICE_URL", "http://localhost:8081")
 GATEWAY_PORT = int(os.getenv("GATEWAY_PORT", "8000"))
 
-# Убираем префиксы протокола если есть
-TTS_HOST = TTS_HOST.replace("http://", "").replace("https://", "")
-ASR_HOST = ASR_HOST.replace("http://", "").replace("https://", "")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("gateway_starting", extra={
-        "tts_host": TTS_HOST,
-        "asr_host": ASR_HOST,
+        "tts_service_url": TTS_SERVICE_URL,
+        "asr_service_url": ASR_SERVICE_URL,
         "port": GATEWAY_PORT
     })
     yield
     logger.info("gateway_shutting_down")
+
 
 app = FastAPI(
     title="Gateway Service",
@@ -40,15 +40,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+
 @app.get("/health")
 async def health():
     """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "gateway",
-        "tts_host": TTS_HOST,
-        "asr_host": ASR_HOST
+        "tts_service_url": TTS_SERVICE_URL,
+        "asr_service_url": ASR_SERVICE_URL
     }
+
 
 @app.get("/health/full")
 async def full_health_check():
@@ -64,7 +66,7 @@ async def full_health_check():
     # Проверяем TTS
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            tts_response = await client.get(f"http://{TTS_HOST}/health")
+            tts_response = await client.get(f"{TTS_SERVICE_URL}/health")
             if tts_response.status_code == 200:
                 tts_data = tts_response.json()
                 services["tts"] = "healthy" if tts_data.get("model_loaded") else "degraded"
@@ -77,7 +79,7 @@ async def full_health_check():
     # Проверяем ASR
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            asr_response = await client.get(f"http://{ASR_HOST}/health")
+            asr_response = await client.get(f"{ASR_SERVICE_URL}/health")
             if asr_response.status_code == 200:
                 asr_data = asr_response.json()
                 services["asr"] = "healthy" if asr_data.get("model_loaded") else "degraded"
@@ -93,6 +95,7 @@ async def full_health_check():
         "status": "healthy" if all_healthy else "degraded",
         "services": services
     }
+
 
 @app.post("/api/echo-bytes")
 async def echo_bytes(request: Request):
@@ -136,7 +139,7 @@ async def echo_bytes(request: Request):
         logger.info("received_audio", extra={"size_bytes": len(audio_bytes)})
         
         # Шаг 2: Отправляем в ASR сервис для распознавания
-        asr_url = f"http://{ASR_HOST}/api/stt/bytes"
+        asr_url = f"{ASR_SERVICE_URL}/api/stt/bytes"
         
         logger.info("calling_asr_service", extra={"url": asr_url})
         
@@ -182,7 +185,7 @@ async def echo_bytes(request: Request):
             """
             Генератор для chunked streaming TTS ответа
             """
-            tts_url = f"http://{TTS_HOST}/api/tts"
+            tts_url = f"{TTS_SERVICE_URL}/api/tts"
             
             logger.info("calling_tts_service", extra={
                 "url": tts_url,
@@ -244,6 +247,7 @@ async def echo_bytes(request: Request):
         logger.error("echo_bytes_error", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
+
 @app.post("/api/tts")
 async def gateway_tts(request: Request):
     """
@@ -260,7 +264,7 @@ async def gateway_tts(request: Request):
         logger.info("gateway_tts_request", extra={"text": text[:100]})
         
         async def tts_proxy_generator():
-            tts_url = f"http://{TTS_HOST}/api/tts"
+            tts_url = f"{TTS_SERVICE_URL}/api/tts"
             
             async with httpx.AsyncClient(timeout=60.0) as client:
                 async with client.stream(
@@ -294,6 +298,7 @@ async def gateway_tts(request: Request):
         logger.error("gateway_tts_error", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/stt")
 async def gateway_stt(request: Request):
     """
@@ -313,7 +318,7 @@ async def gateway_stt(request: Request):
         
         logger.info("gateway_stt_request", extra={"size_bytes": len(audio_bytes)})
         
-        asr_url = f"http://{ASR_HOST}/api/stt/bytes"
+        asr_url = f"{ASR_SERVICE_URL}/api/stt/bytes"
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -336,6 +341,7 @@ async def gateway_stt(request: Request):
     except Exception as e:
         logger.error("gateway_stt_error", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn
